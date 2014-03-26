@@ -17,7 +17,7 @@
 /*
  *    RemoteEngine.java
  *    Copyright (C) 2000 Mark Hall
- *
+ *    Modified by Prem Melville
  */
 
 
@@ -35,6 +35,9 @@ import weka.core.Queue;
 
 /**
  * A general purpose server for executing Task objects sent via RMI.
+ *
+ * This code has been modified so that you can run multiple remote
+ * engines on the same machine.
  *
  * @author Mark Hall (mhall@cs.waikato.ac.nz)
  * @version $Revision: 1.1.1.1 $
@@ -274,8 +277,16 @@ public class RemoteEngine extends UnicastRemoteObject
    *
    * @param args 
    */
-  public static void main(String[] args) {
-    if (System.getSecurityManager() == null) {
+    public static void main(String[] args) {
+      boolean multiProcessor = false;
+      String procID="";
+      if(args.length > 0){
+	  multiProcessor = true;
+	  //argument provided to distinguish between clients on the same machine
+	  procID = args[0];
+      } 
+      
+      if (System.getSecurityManager() == null) {
       System.setSecurityManager(new RMISecurityManager());
     }
     InetAddress localhost = null;
@@ -287,15 +298,18 @@ public class RemoteEngine extends UnicastRemoteObject
     }
     String name;
     if (localhost != null) {
-      name = "//"+localhost.getHostName()+"/RemoteEngine";
+	if(multiProcessor)
+	    name = "//"+localhost.getHostName()+"/RemoteEngine"+procID;
+	else
+	    name = "//"+localhost.getHostName()+"/RemoteEngine";
     } else {
-      name = "//localhost/RemoteEngine";
+	name = "//localhost/RemoteEngine";
     }
     
     try {
-      Compute engine = new RemoteEngine(name);
-      Naming.rebind(name, engine);
-      System.out.println("RemoteEngine bound in RMI registry");
+	Compute engine = new RemoteEngine(name);
+	Naming.rebind(name, engine);
+	System.out.println("RemoteEngine bound in RMI registry: "+name);
     } catch (Exception e) {
       System.err.println("RemoteEngine exception: " + 
 			 e.getMessage());
@@ -305,7 +319,7 @@ public class RemoteEngine extends UnicastRemoteObject
 	java.rmi.registry.LocateRegistry.createRegistry(1099);
 	Compute engine = new RemoteEngine(name);
 	Naming.rebind(name, engine);
-	System.out.println("RemoteEngine bound in RMI registry");
+	System.out.println("RemoteEngine bound in RMI registry: "+name);
       } catch (Exception ex) {
 	ex.printStackTrace();
       }

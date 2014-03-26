@@ -34,6 +34,7 @@ import weka.core.OptionHandler;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.Date;
+import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.Enumeration;
 import java.util.Vector;
@@ -127,15 +128,29 @@ public class PairedTTester implements OptionHandler {
 
   /** Produce tables in latex format */
   protected boolean m_latexOutput = false;
+
+  //=============== BEGIN EDIT melville ===============
+  /** Precision desired - number of decimal places */
+  protected int m_Precision = 4;
+  
+  /** Flag to indicate whether learning curves are to be produces */
+  protected boolean m_LearningCurve = false;
+  
+  /** Flag to indicate whether learning curves are specified by fraction */
+  protected boolean m_Fraction = false;
+  
+  /** Points on the learning curve */
+  protected double [] m_Points;
+  //=============== END EDIT melville ===============
   
   /** Produce tables in csv format */
   protected boolean m_csvOutput = false;
   
   /** the number of digits after the period (= precision) for printing the mean */
-  protected int m_MeanPrec = 2;
+  protected int m_MeanPrec = 4;
   
   /** the number of digits after the period (= precision) for printing the std. deviation */
-  protected int m_StdDevPrec = 2;
+  protected int m_StdDevPrec = 4;
   
   /* A list of unique "dataset" specifiers that have been observed */
   protected class DatasetSpecifiers {
@@ -459,6 +474,44 @@ public class PairedTTester implements OptionHandler {
   public boolean getShowStdDevs() {
     return m_ShowStdDevs;
   }
+
+  //=============== BEGIN EDIT melville ===============
+  /** Returns true if learning curves have to be analyzed 
+   * @return true if learning curves have to be analyzed */
+  public boolean getLearningCurve() {
+    return m_LearningCurve;
+  }
+  
+  /** Set to true if learning curves are to be analyzed
+   * @param v  Value to assign to m_LearningCurve. */
+  public void setLearningCurve(boolean  v) {
+    this.m_LearningCurve = v;
+  }
+  
+  /** Set to true if fractions are specified for learning curves
+   * @param f  Value to assign to m_Fraction.  */
+  public void setFraction(boolean f){
+    this.m_Fraction = f;
+  }
+  
+  /** Returns true if fractions are specified for learning curves
+   * @return true if fractions are specified for learning curves */
+  public boolean getFraction(){
+    return m_Fraction;
+  }
+  
+  /** Get the points on the learning curve
+   * @return value of points on the learning curve  */
+  public double [] getPoints() {
+    return m_Points;
+  }
+    
+  /** Set the points on the learning curve
+   * @param v  Value to points on the learning curve  */
+  public void setPoints(double []  v) {
+    this.m_Points = v;
+  }
+  //=============== END EDIT melville ===============
   
   /**
    * Separates the instances into resultsets and by dataset/run.
@@ -723,6 +776,84 @@ public class PairedTTester implements OptionHandler {
     return pairedStats;
 
   }
+
+  //=============== BEGIN EDIT melville ===============
+
+  /**
+   * Computes a paired t-test comparison for a specified dataset between
+   * two resultsets.
+   *
+   * @param datasetSpecifier the dataset specifier
+   * @param resultset1Index the index of the first resultset
+   * @param resultset2Index the index of the second resultset
+   * @param comparisonColumn the column containing values to compare
+   * @param pairedStats stats that are being accumulated
+   * @return the results of the paired comparison
+   * @exception Exception if an error occurs
+   */
+  public PairedStats accumulateStatistics(Instance datasetSpecifier,
+                                          int resultset1Index,
+                                          int resultset2Index,
+                                          int comparisonColumn,
+                                          PairedStats pairedStats)
+    throws Exception {
+
+    if (m_Instances.attribute(comparisonColumn).type()
+	!= Attribute.NUMERIC) {
+      throw new Exception("Comparison column " + (comparisonColumn + 1)
+			  + " ("
+			  + m_Instances.attribute(comparisonColumn).name()
+			  + ") is not numeric");
+    }
+    if (!m_ResultsetsValid) {
+      prepareData();
+    }
+
+    Resultset resultset1 = (Resultset) m_Resultsets.elementAt(resultset1Index);
+    Resultset resultset2 = (Resultset) m_Resultsets.elementAt(resultset2Index);
+    FastVector dataset1 = resultset1.dataset(datasetSpecifier);
+    FastVector dataset2 = resultset2.dataset(datasetSpecifier);
+    String datasetName = templateString(datasetSpecifier);
+    if (dataset1 == null) {
+      throw new Exception("No results for dataset=" + datasetName
+                          + " for resultset=" + resultset1.templateString());
+    } else if (dataset2 == null) {
+      throw new Exception("No results for dataset=" + datasetName
+                          + " for resultset=" + resultset2.templateString());
+    } else if (dataset1.size() != dataset2.size()) {
+      throw new Exception("Results for dataset=" + datasetName
+			  + " differ in size for resultset="
+			  + resultset1.templateString()
+			  + " and resultset="
+			  + resultset2.templateString()
+			  );
+    }
+
+    
+    //PairedStats pairedStats = new PairedStats(m_SignificanceLevel);
+    for (int k = 0; k < dataset1.size(); k ++) {
+      Instance current1 = (Instance) dataset1.elementAt(k);
+      Instance current2 = (Instance) dataset2.elementAt(k);
+      if (current1.isMissing(comparisonColumn)) {
+	throw new Exception("Instance has missing value in comparison "
+			    + "column!\n" + current1);
+      }
+      if (current2.isMissing(comparisonColumn)) {
+	throw new Exception("Instance has missing value in comparison "
+			    + "column!\n" + current2);
+      }
+      if (current1.value(m_RunColumn) != current2.value(m_RunColumn)) {
+	System.err.println("Run numbers do not match!\n"
+                           + current1 + current2);
+      }
+      double value1 = current1.value(comparisonColumn);
+      double value2 = current2.value(comparisonColumn);
+      pairedStats.add(value1, value2);
+    }
+    
+    return pairedStats;
+  }
+  //=============== END EDIT melville ===============
   
   /**
    * Creates a key that maps resultset numbers to their descriptions.
@@ -769,6 +900,34 @@ public class PairedTTester implements OptionHandler {
       + "Confidence: " + getSignificanceLevel() + " (two tailed)\n"
       + "Date:       " + (new SimpleDateFormat()).format(new Date()) + "\n\n";
   }
+
+
+  //=============== BEGIN EDIT melville ===============
+  /**
+   * Creates a "header" string describing the current resultsets.
+   *
+   * @param comparisonField comparison field 
+   * @return a value of type 'String'
+   */
+  public String header(String comparisonField) {
+
+    if (!m_ResultsetsValid) {
+      try {
+	prepareData();
+      } catch (Exception ex) {
+	ex.printStackTrace();
+	return ex.getMessage();
+      }
+    }
+    return "Analysing:  "
+      + comparisonField + '\n'
+      + "Datasets:   " + getNumDatasets() + '\n'
+      + "Resultsets: " + getNumResultsets() + '\n'
+      + "Confidence: " + getSignificanceLevel() + " (two tailed)\n"
+      + "Date:       " + (new SimpleDateFormat()).format(new Date()) + "\n\n";
+  }
+  //=============== END EDIT melville ===============
+  
 
   /**
    * Carries out a comparison between all resultsets, counting the number
@@ -1459,6 +1618,796 @@ public class PairedTTester implements OptionHandler {
     }
     return result.toString();
   }
+
+     //=============== BEGIN EDIT melville ===============
+
+    /**
+     * Generates comparison tables across learning curves
+     *
+     * @param baseResultset the index of the base resultset
+     * @param comparisonColumn the index of the column to compare over
+     * @param maxWidthMean width for the mean
+     * @param maxWidthStdDev width for the standard deviation
+     * @return the comparison table string
+     */
+    private String multiResultsetFullLearningPlainText(int baseResultset,
+						       int comparisonColumn,
+						       int maxWidthMean,
+						       int maxWidthStdDev) {
+	
+	StringBuffer result = new StringBuffer(1000);
+	//Compute column widths for pretty printing
+	int datasetLength = 20;
+	int meanWidth = maxWidthMean;//account for the decimal point and decimal digits
+	if(m_Precision>0) meanWidth += (1 + m_Precision); //account for the decimal point and decimal digits
+	int resultsetLength = 2*meanWidth + 6;
+	int stdWidth = 0;
+	int maxPointWidth = 6;
+	if (m_ShowStdDevs) {
+	    stdWidth = maxWidthStdDev + 1 + m_Precision;
+	    resultsetLength += 2*stdWidth + 4;
+	}
+	
+	//Find maximum point width - assuming the points are in order
+	maxPointWidth = (int) (Math.log(m_Points[m_Points.length-1])/Math.log(10)) + 1;
+	if(maxPointWidth<6) maxPointWidth=6;
+	
+	Vector datasetNames = new Vector();//store names of dataset
+	HashMap specMap = new HashMap();//maps dataset:point pair to a unique specifier
+	
+	for (int i = 0; i < getNumDatasets(); i++) {
+	    Instance spec = m_DatasetSpecifiers.specifier(i);
+	    String dataName = spec.toString(m_DatasetKeyColumns[0]);
+	    String point = spec.toString(m_DatasetKeyColumns[1]);
+	    if(!datasetNames.contains(dataName)){
+		datasetNames.add(dataName);
+	    }
+	    specMap.put(dataName+":"+point, spec);
+	}
+		
+	StringBuffer titles;
+	for (int j = 0; j < getNumResultsets(); j++) {//For each system comparison
+	    //Generate a different table comparing pts across the learning curve with the base system
+	    
+	    if (j == baseResultset) continue;
+	    
+	    //Display title
+	    titles = new StringBuffer();
+	    titles.append("Comparing "+Utils.padLeft("(" + (j + 1)+ ") "+ getResultsetName(j),
+						     15)+" to "+
+			  Utils.padRight("(" + (baseResultset + 1)+ ") "+ getResultsetName(baseResultset),
+					 15));
+	    result.append(titles.toString()).append("\n\n");
+	    
+	    //Display table headings
+	    int numPts = m_Points.length;
+	    int []c_win = new int[numPts];//column totals to each point on the learning curve
+	    int []c_loss = new int[numPts];
+	    int []c_tie = new int[numPts];
+	    result.append("Dataset\n");
+	    if(m_Fraction)
+		result.append(Utils.padLeft("% Points",datasetLength));
+	    else
+		result.append(Utils.padLeft("Points",datasetLength));
+	    
+	    for(int pts=0; pts<numPts; pts++){
+		if(m_Fraction)
+		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts]*100,maxPointWidth,2)+"    ",resultsetLength));
+		else
+		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts],maxPointWidth,2)+"    ",resultsetLength));
+	    }
+	    result.append("\n");
+	    result.append(Utils.padLeft("",datasetLength));
+	    for(int pts=0; pts<numPts; pts++)
+		for(int k=0; k<resultsetLength; k++)
+		    result.append("-");
+	    result.append("\n");
+	    
+	    for(int dataIndex=0; dataIndex<datasetNames.size(); dataIndex++){//for each dataset
+		int r_win=0, r_loss=0, r_tie=0;//row totals for each dataset
+		
+		result.append(Utils.padRight((String)datasetNames.get(dataIndex), datasetLength));
+		
+		for(int ptIndex=0; ptIndex<m_Points.length; ptIndex++){//for each point on the curve
+		    String key = datasetNames.get(dataIndex)+":"+(new Double(m_Points[ptIndex]));
+		    Object obj = specMap.get(key);
+		    if(!m_Fraction && obj==null){ 
+			key = datasetNames.get(dataIndex)+":"+(new Integer((int) m_Points[ptIndex]));
+			obj = specMap.get(key);
+		    }
+		    if(obj!=null){//if the point was recorded
+			Instance specifier = (Instance) obj;
+			try {
+			    PairedStats pairedStats = 
+				calculateStatistics(specifier, 
+						    baseResultset, j, comparisonColumn);
+			    
+			    char sigChar = ' ';
+			    if (pairedStats.differencesSignificance < 0) {
+				sigChar = 'v';
+				r_win++;
+				c_win[ptIndex]++;
+			    } else if (pairedStats.differencesSignificance > 0) {
+				sigChar = '*';
+				r_loss++;
+				c_loss[ptIndex]++;
+			    } else {
+				r_tie++;
+				c_tie[ptIndex]++;
+			    }
+			    result.append(Utils.padLeft("",4));
+			    result.append(sigChar).append(Utils.doubleToString(pairedStats.yStats.mean,
+									       meanWidth,
+									       m_Precision));
+			    
+			    if (m_ShowStdDevs) {
+				if (Double.isInfinite(pairedStats.xStats.stdDev)) {
+				    result.append('(' + Utils.padRight("Inf", stdWidth)
+						  +')');
+				} else {
+				    result.append('('+Utils.doubleToString(pairedStats.yStats.stdDev,
+									   stdWidth,m_Precision)
+						  +')');
+				}
+			    }
+			    
+			    result.append('/');
+			    
+			    pairedStats = 
+				calculateStatistics(specifier, 
+						    baseResultset, baseResultset,
+						    comparisonColumn);
+			    
+			    result.append(Utils.doubleToString(pairedStats.xStats.mean,
+							       meanWidth, m_Precision));
+			    if (m_ShowStdDevs) {
+				if (Double.isInfinite(pairedStats.xStats.stdDev)) {
+				    result.append('(' + Utils.padRight("Inf", stdWidth)
+						  +')');
+				} else {
+				    result.append('('+Utils.doubleToString(pairedStats.xStats.stdDev,
+									   stdWidth,m_Precision)
+						  +')');
+				}
+			    }
+			}catch (Exception ex) {
+			    ex.printStackTrace();
+			}
+		    }else{//if the point was not tested print spaces
+			result.append(Utils.padLeft("",resultsetLength));
+		    }
+		}
+		result.append("    (" + r_win + '/' + r_tie
+			      + '/' + r_loss + ")\n");
+	    }
+	    
+	    //Display column totals of win/tie/loss counts
+	    result.append(Utils.padLeft("(v/ /*)",datasetLength));
+	    int win=0,tie=0,loss=0;
+	    for(int ptIndex=0; ptIndex<m_Points.length; ptIndex++){//for each point on the curve
+		win += c_win[ptIndex];
+		tie += c_tie[ptIndex];
+		loss += c_loss[ptIndex];
+		result.append(Utils.padLeft("(" + c_win[ptIndex] + '/' + c_tie[ptIndex]
+					    + '/' + c_loss[ptIndex] + ")    ",
+					    resultsetLength));
+		
+	    }
+	    result.append("    (" +win + '/' +tie
+			  + '/' + loss + ")\n\n\n");
+	}
+	
+	return result.toString();
+    }
+    //=============== END EDIT melville ===============
+
+
+
+    //=============== BEGIN EDIT melville ===============
+    /**
+     * Generates learning curves for one result set i.e. only results from one system
+     *
+     * @param baseResultset the index of the base resultset
+     * @param comparisonColumn the index of the column to compare over
+     * @param maxWidthMean width for the mean
+     * @param maxWidthStdDev width for the standard deviation
+     * @return the comparison table string
+     */
+  private String oneResultsetFullLearningPlainText(int baseResultset,
+                                                   int comparisonColumn,
+                                                   int maxWidthMean,
+                                                   int maxWidthStdDev) {
+	
+    StringBuffer result = new StringBuffer(1000);
+    //Compute column widths for pretty printing
+    int datasetLength = 20;
+    int meanWidth = maxWidthMean;
+    if(m_Precision>0) meanWidth += (1 + m_Precision); //account for the decimal point and decimal digits
+    int resultsetLength = meanWidth + 4;
+    int stdWidth = 0;
+    int maxPointWidth = 6;
+    if (m_ShowStdDevs) {
+      stdWidth = maxWidthStdDev + 1 + m_Precision;
+      resultsetLength += stdWidth + 2;
+    }
+	
+    //Find maximum point width - assuming the points are in order
+    maxPointWidth = (int) (Math.log(m_Points[m_Points.length-1])/Math.log(10)) + 1;
+    if(maxPointWidth<6) maxPointWidth=6;
+	
+    Vector datasetNames = new Vector();//store names of dataset
+    HashMap specMap = new HashMap();//maps dataset:point pair to a unique specifier
+	
+    for (int i = 0; i < getNumDatasets(); i++) {
+      Instance spec = m_DatasetSpecifiers.specifier(i);
+      String dataName = spec.toString(m_DatasetKeyColumns[0]);
+      String point = spec.toString(m_DatasetKeyColumns[1]);
+      if(!datasetNames.contains(dataName)){
+        datasetNames.add(dataName);
+      }
+      specMap.put(dataName+":"+point, spec);
+    }
+		
+    StringBuffer titles;
+    //Display title
+    titles = new StringBuffer();
+	
+    titles.append("Learning curve results for "+Utils.padLeft("(" + (baseResultset + 1)+ ") "+
+                                                              getResultsetName(baseResultset),15));
+	
+    result.append(titles.toString()).append("\n\n");
+	
+    //Display table headings
+    int numPts = m_Points.length;
+    result.append("Dataset\n");
+    if(m_Fraction)
+      result.append(Utils.padLeft("% Points",datasetLength));
+    else
+      result.append(Utils.padLeft("Points",datasetLength));
+	
+    for(int pts=0; pts<numPts; pts++){
+      if(m_Fraction)
+        result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts]*100,maxPointWidth,2),resultsetLength));
+      else
+        result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts],maxPointWidth,2),resultsetLength));
+    }
+    result.append("\n");
+    result.append(Utils.padLeft("",datasetLength));
+    for(int pts=0; pts<numPts; pts++)
+      for(int k=0; k<resultsetLength; k++)
+        result.append("-");
+    result.append("\n");
+	
+    for(int dataIndex=0; dataIndex<datasetNames.size(); dataIndex++){//for each dataset
+      result.append(Utils.padRight((String)datasetNames.get(dataIndex), datasetLength));
+	    
+      for(int ptIndex=0; ptIndex<m_Points.length; ptIndex++){//for each point on the curve
+        String key = datasetNames.get(dataIndex)+":"+(new Double(m_Points[ptIndex]));
+        Object obj = specMap.get(key);
+        if(!m_Fraction && obj==null){ 
+          key = datasetNames.get(dataIndex)+":"+(new Integer((int) m_Points[ptIndex]));
+          obj = specMap.get(key);
+        }
+        if(obj!=null){//if the point was recorded
+          Instance specifier = (Instance) obj;
+          try {
+            PairedStats pairedStats = calculateStatistics(specifier, 
+                                                          baseResultset, baseResultset,
+                                                          comparisonColumn);
+            result.append(Utils.padLeft("",4));
+            result.append(Utils.doubleToString(pairedStats.xStats.mean,
+                                               meanWidth, m_Precision));
+            if (m_ShowStdDevs) {
+              if (Double.isInfinite(pairedStats.xStats.stdDev)) {
+                result.append('(' + Utils.padRight("Inf", stdWidth)
+                              +')');
+              } else {
+                result.append('('+Utils.doubleToString(pairedStats.xStats.stdDev,
+                                                       stdWidth,m_Precision)
+                              +')');
+              }
+            }
+          }catch (Exception ex) {
+            ex.printStackTrace();
+          }
+        }else{//if the point was not tested print spaces
+          result.append(Utils.padLeft("",resultsetLength));
+        }
+      }
+      result.append("\n");
+    }
+    result.append("\n\n");
+    return result.toString();
+  }
+  //=============== END EDIT melville ===============
+  
+
+  //=============== BEGIN EDIT melville ===============
+  /**
+   * Creates a comparison table where a base resultset is compared to the
+   * other resultsets. Results are presented for every dataset.
+   *
+   * @param baseResultset the index of the base resultset
+   * @param comparisonColumn the index of the column to compare over
+   * @return the comparison table string
+   * @exception Exception if an error occurs
+   */
+  public String multiResultsetPercentErrorReduction(int baseResultset,
+                                                    int comparisonColumn) throws Exception {
+
+    StringBuffer result = new StringBuffer(1000);
+    if(getNumResultsets()==1){//no comparison to be made - just display one learning curve
+      int maxWidthMean = 2;
+      int maxWidthStdDev = 2;
+      // determine max field width
+      for (int i = 0; i < getNumDatasets(); i++) {
+        for (int j = 0; j < getNumResultsets(); j++) {
+          try {
+            PairedStats pairedStats = 
+              calculateStatistics(m_DatasetSpecifiers.specifier(i), 
+                                  baseResultset, j, comparisonColumn);
+            if (!Double.isInfinite(pairedStats.yStats.mean) &&
+                !Double.isNaN(pairedStats.yStats.mean)) {
+              double width = ((Math.log(Math.abs(pairedStats.yStats.mean)) / 
+                               Math.log(10))+1);
+              if (width > maxWidthMean) {
+                maxWidthMean = (int)width;
+              }
+            }
+            if (m_ShowStdDevs &&
+                !Double.isInfinite(pairedStats.yStats.stdDev) &&
+                !Double.isNaN(pairedStats.yStats.stdDev)) {
+              double width = ((Math.log(Math.abs(pairedStats.yStats.stdDev)) / 
+                               Math.log(10))+1);
+              if (width > maxWidthStdDev) {
+                maxWidthStdDev = (int)width;
+              }
+            }
+          }  catch (Exception ex) {
+            ex.printStackTrace();
+          }
+        }
+      }
+      result = new StringBuffer(oneResultsetFullLearningPlainText(baseResultset, 
+                                                                  comparisonColumn, 
+                                                                  maxWidthMean,
+                                                                  maxWidthStdDev));
+    }
+    else
+      result = new StringBuffer(multiResultsetPercentErrorReductionPlainText(baseResultset, 
+                                                                             comparisonColumn));
+    
+    // append a key so that we can tell the difference between long
+    // scheme+option names
+    result.append("\nKey:\n\n");
+    for (int j = 0; j < getNumResultsets(); j++) {
+      result.append("("+(j+1)+") ");
+      result.append(getResultsetName(j)+"\n");
+    }
+    return result.toString();
+  }
+
+  //=============== END EDIT melville ===============
+
+
+
+    //=============== BEGIN EDIT melville ===============
+    /**
+     * Generates percentage error reduction tables across learning curves
+     *
+     * @param baseResultset the index of the base resultset
+     * @param comparisonColumn the index of the column to compare over
+     * @return the comparison table string
+     */
+  private String multiResultsetPercentErrorReductionPlainText(int baseResultset,
+                                                              int comparisonColumn) {
+	
+    StringBuffer result = new StringBuffer(1000);
+    //Compute column widths for pretty printing
+    int datasetLength = 20;
+    int meanWidth = 3; 
+    if(m_Precision>0) meanWidth += (1 + m_Precision); //account for the decimal point and decimal digits
+    int resultsetLength = 2*meanWidth;
+    int maxPointWidth = 6;
+    int numPts = m_Points.length;
+	
+    //Find maximum point width - assuming the points are in order
+    maxPointWidth = (int) (Math.log(m_Points[m_Points.length-1])/Math.log(10)) + 1;
+    if(maxPointWidth<6) maxPointWidth=6;
+	
+    Vector datasetNames = new Vector();//store names of dataset
+    HashMap specMap = new HashMap();//maps dataset:point pair to a unique specifier
+	
+    for (int i = 0; i < getNumDatasets(); i++) {
+      Instance spec = m_DatasetSpecifiers.specifier(i);
+      String dataName = spec.toString(m_DatasetKeyColumns[0]);
+      String point = spec.toString(m_DatasetKeyColumns[1]);
+      if(!datasetNames.contains(dataName)){
+        datasetNames.add(dataName);
+      }
+      specMap.put(dataName+":"+point, spec);
+    }
+		
+    StringBuffer titles;
+    for (int j = 0; j < getNumResultsets(); j++) {//For each system comparison
+      //Generate a different table comparing pts across the learning curve with the base system
+	    
+      if (j == baseResultset) continue;
+	    
+      //Display title
+      titles = new StringBuffer();
+      titles.append("Comparing "+Utils.padLeft("(" + (j + 1)+ ") "+ getResultsetName(j),
+                                               15)+" to "+
+                    Utils.padRight("(" + (baseResultset + 1)+ ") "+ getResultsetName(baseResultset),
+                                   15));
+      result.append(titles.toString()).append("\n\n");
+	    
+      //Display table headings
+      result.append("Dataset\n");
+      if(m_Fraction)
+        result.append(Utils.padLeft("% Points",datasetLength));
+      else
+        result.append(Utils.padLeft("Points",datasetLength));
+
+      /****************************************
+       * Uncomment out the block below, if you want the error
+       * reductions displayed for each point on the curve.
+       ****************************************/
+
+      //  	    for(int pts=0; pts<numPts; pts++){
+      //  		if(m_Fraction)
+      //  		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts]*100,meanWidth,2),resultsetLength));
+      //  		else
+      //  		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts],meanWidth,2),resultsetLength));
+      //  	    }
+      //  	    result.append("\n");
+      //  	    result.append(Utils.padLeft("",datasetLength));
+      //  	    for(int pts=0; pts<numPts; pts++)
+      //  		for(int k=0; k<resultsetLength; k++)
+      //  		    result.append("-");
+      result.append("\n");
+	    
+      int datasetCtr = 0;
+      double errorReduction;
+      double datasetSum = 0.0;//sum of avg error reduction across datasets
+      for(int dataIndex=0; dataIndex<datasetNames.size(); dataIndex++){//for each dataset
+        double r_sum = 0.0;//sum across the row
+        int r_ctr = 0;//num of pts in the row (this can be less than numPts)
+
+        result.append(Utils.padRight((String)datasetNames.get(dataIndex), datasetLength));
+		
+        for(int ptIndex=0; ptIndex<m_Points.length; ptIndex++){//for each point on the curve
+          String key = datasetNames.get(dataIndex)+":"+(new Double(m_Points[ptIndex]));
+          Object obj = specMap.get(key);
+          if(!m_Fraction && obj==null){ 
+            key = datasetNames.get(dataIndex)+":"+(new Integer((int) m_Points[ptIndex]));
+            obj = specMap.get(key);
+          }
+          if(obj!=null){//if the point was recorded
+            Instance specifier = (Instance) obj;
+            try {
+              PairedStats pairedStats =  calculateStatistics(specifier, baseResultset, j, comparisonColumn);
+              double yVal = pairedStats.yStats.mean;
+              pairedStats = calculateStatistics(specifier, baseResultset, baseResultset, comparisonColumn);
+              double xVal = pairedStats.xStats.mean;
+              if(yVal == 0 && xVal == 0)
+                errorReduction = 0;
+              else
+                errorReduction = (1.0 - yVal/xVal)*100.0;
+              //Check if errorReduction is NaN or Inf - else
+              //result.append(Utils.padLeft(Utils.doubleToString(errorReduction,meanWidth,m_Precision),resultsetLength));
+              r_sum += errorReduction;
+              r_ctr++;
+            }catch (Exception ex) {
+              ex.printStackTrace();
+            }
+          }else{//if the point was not tested print spaces
+            //result.append(Utils.padLeft("",resultsetLength));
+          }
+        }
+        if(r_ctr>0){
+          datasetCtr++;
+          double r_avg = r_sum/r_ctr;
+          datasetSum += r_avg;
+          result.append(" | "+Utils.padLeft(Utils.doubleToString(r_avg,meanWidth,m_Precision),resultsetLength-3));
+        }
+        result.append("\n");
+      }
+      String s="";
+      for(int k=0; k<meanWidth; k++)
+        s = s + "-";
+      /****************************************
+       * Uncomment out the block below, if you want the error
+       * reductions displayed for each point on the curve.
+       ****************************************/
+      //  	    result.append(Utils.padLeft(s,datasetLength+resultsetLength*(numPts+1)));
+      //  	    result.append("\n");
+      //  	    result.append(Utils.padLeft(Utils.doubleToString(datasetSum/datasetCtr,meanWidth,m_Precision),datasetLength+resultsetLength*(numPts+1))+"\n\n\n");
+      result.append(Utils.padLeft(s,datasetLength+resultsetLength));
+      result.append("\n");
+      result.append(Utils.padLeft(Utils.doubleToString(datasetSum/datasetCtr,meanWidth,m_Precision),datasetLength+resultsetLength)+"\n\n\n");
+    }
+    return result.toString();
+  }
+  //=============== END EDIT melville ===============
+
+	
+  //=============== BEGIN EDIT melville ===============
+  /**
+   * Creates a comparison table where a base resultset is compared to the
+   * other resultsets. Results are presented for every dataset.
+   *
+   * @param baseResultset the index of the base resultset
+   * @param comparisonColumn the index of the column to compare over
+   * @param nFraction top n fraction of error reductions are averaged
+   * @return the comparison table string
+   * @exception Exception if an error occurs */
+  public String multiResultsetTopNPercentErrorReduction(int baseResultset,
+                                                        int comparisonColumn, double nFraction) throws Exception {
+	
+    StringBuffer result = new StringBuffer(1000);
+    if(getNumResultsets()==1){//no comparison to be made - just display one learning curve
+      int maxWidthMean = 2;
+      int maxWidthStdDev = 2;
+      // determine max field width
+      for (int i = 0; i < getNumDatasets(); i++) {
+        for (int j = 0; j < getNumResultsets(); j++) {
+          try {
+            PairedStats pairedStats = 
+              calculateStatistics(m_DatasetSpecifiers.specifier(i), 
+                                  baseResultset, j, comparisonColumn);
+            if (!Double.isInfinite(pairedStats.yStats.mean) &&
+                !Double.isNaN(pairedStats.yStats.mean)) {
+              double width = ((Math.log(Math.abs(pairedStats.yStats.mean)) / 
+                               Math.log(10))+1);
+              if (width > maxWidthMean) {
+                maxWidthMean = (int)width;
+              }
+            }
+            if (m_ShowStdDevs &&
+                !Double.isInfinite(pairedStats.yStats.stdDev) &&
+                !Double.isNaN(pairedStats.yStats.stdDev)) {
+              double width = ((Math.log(Math.abs(pairedStats.yStats.stdDev)) / 
+                               Math.log(10))+1);
+              if (width > maxWidthStdDev) {
+                maxWidthStdDev = (int)width;
+              }
+            }
+          }  catch (Exception ex) {
+            ex.printStackTrace();
+          }
+        }
+      }
+      result = new StringBuffer(oneResultsetFullLearningPlainText(baseResultset, 
+                                                                  comparisonColumn, 
+                                                                  maxWidthMean,
+                                                                  maxWidthStdDev));
+    }
+    else{
+      result = new StringBuffer(multiResultsetTopNPercentErrorReductionPlainText(baseResultset, 
+                                                                                 comparisonColumn, nFraction));
+    }
+	
+    // append a key so that we can tell the difference between long
+    // scheme+option names
+    result.append("\nKey:\n\n");
+    for (int j = 0; j < getNumResultsets(); j++) {
+      result.append("("+(j+1)+") ");
+      result.append(getResultsetName(j)+"\n");
+    }
+    return result.toString();
+  }
+
+  //=============== END EDIT melville ===============
+
+
+  //=============== BEGIN EDIT melville ===============
+  /**
+   * Generates percentage error reduction tables across learning curves
+   *
+   * @param baseResultset the index of the base resultset
+   * @param comparisonColumn the index of the column to compare over
+   * @param nFraction top n fraction of error reductions are averaged
+   * @return the comparison table string
+   */
+  private String multiResultsetTopNPercentErrorReductionPlainText(int baseResultset,
+                                                                  int comparisonColumn, double nFraction) {
+	
+    StringBuffer result = new StringBuffer(1000);
+    //Compute column widths for pretty printing
+    int datasetLength = 20;
+    int meanWidth = 3; 
+    if(m_Precision>0) meanWidth += (1 + m_Precision); //account for the decimal point and decimal digits
+    int resultsetLength = 2*meanWidth;
+    int maxPointWidth = 6;
+    int numPts = m_Points.length;
+	
+    //Find maximum point width - assuming the points are in order
+    maxPointWidth = (int) (Math.log(m_Points[m_Points.length-1])/Math.log(10)) + 1;
+    if(maxPointWidth<6) maxPointWidth=6;
+	
+    Vector datasetNames = new Vector();//store names of dataset
+    HashMap specMap = new HashMap();//maps dataset:point pair to a unique specifier
+	
+    for (int i = 0; i < getNumDatasets(); i++) {
+      Instance spec = m_DatasetSpecifiers.specifier(i);
+      String dataName = spec.toString(m_DatasetKeyColumns[0]);
+      String point = spec.toString(m_DatasetKeyColumns[1]);
+      if(!datasetNames.contains(dataName)){
+        datasetNames.add(dataName);
+      }
+      specMap.put(dataName+":"+point, spec);
+    }
+	
+    StringBuffer titles;
+    for (int j = 0; j < getNumResultsets(); j++) {//For each system comparison
+      //Generate a different table comparing pts across the learning curve with the base system
+	    
+      if (j == baseResultset) continue;
+	    
+      //Display title
+      titles = new StringBuffer();
+      titles.append("Comparing "+Utils.padLeft("(" + (j + 1)+ ") "+ getResultsetName(j),
+                                               15)+" to "+
+                    Utils.padRight("(" + (baseResultset + 1)+ ") "+ getResultsetName(baseResultset),
+                                   15));
+      result.append(titles.toString()).append("\n\n");
+	    
+      //Display table headings
+      result.append("Dataset\n");
+      if(m_Fraction)
+        result.append(Utils.padLeft("% Points",datasetLength));
+      else
+        result.append(Utils.padLeft("Points",datasetLength));
+
+      /****************************************
+       * Uncomment out the block below, if you want the error
+       * reductions displayed for each point on the curve.
+       ****************************************/	    
+      //  	    for(int pts=0; pts<numPts; pts++){
+      //  		if(m_Fraction)
+      //  		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts]*100,meanWidth,2),resultsetLength));
+      //  		else
+      //  		    result.append(Utils.padLeft(Utils.doubleToString(m_Points[pts],meanWidth,2),resultsetLength));
+      //  	    }
+      //  	    result.append("\n");
+      //  	    result.append(Utils.padLeft("",datasetLength));
+      //  	    for(int pts=0; pts<numPts; pts++)
+      //  		for(int k=0; k<resultsetLength; k++)
+      //  		    result.append("-");
+      result.append("\n");
+	    
+      int datasetCtr = 0;
+      double errorReduction;
+	    
+      Triple []ptsErrorReduction = new Triple[numPts];//stores error reductions at each point and t-test results
+      double datasetSum = 0.0;//sum of avg error reduction across datasets
+      for(int dataIndex=0; dataIndex<datasetNames.size(); dataIndex++){//for each dataset
+        int r_ctr = 0;//num of pts in the row (this can be less than numPts)
+		
+        result.append(Utils.padRight((String)datasetNames.get(dataIndex), datasetLength));
+		
+        for(int ptIndex=0; ptIndex<numPts; ptIndex++){//for each point on the curve
+          String key = datasetNames.get(dataIndex)+":"+(new Double(m_Points[ptIndex]));
+          Object obj = specMap.get(key);
+          if(!m_Fraction && obj==null){ 
+            key = datasetNames.get(dataIndex)+":"+(new Integer((int) m_Points[ptIndex]));
+            obj = specMap.get(key);
+          }
+          if(obj!=null){//if the point was recorded
+            Instance specifier = (Instance) obj;
+            double signResult = 0;
+            try {
+              PairedStats pairedStats =  calculateStatistics(specifier, baseResultset, j, comparisonColumn);
+			    
+              //Check if result is statistically significant
+              if(pairedStats.differencesSignificance > 0) signResult = 1;
+              else signResult = 0;
+			    
+              double yVal = pairedStats.yStats.mean;
+              double xVal = pairedStats.xStats.mean;
+              if(yVal == 0 && xVal == 0)
+                errorReduction = 0;
+              else
+                errorReduction = (1.0 - yVal/xVal)*100.0;
+              //Check if errorReduction is NaN or Inf - else
+              //result.append(Utils.padLeft(Utils.doubleToString(errorReduction,meanWidth,m_Precision),resultsetLength));
+			    
+              ptsErrorReduction[r_ctr] = new Triple(errorReduction, signResult, specifier);
+              r_ctr++;
+            }catch (Exception ex) {
+              ex.printStackTrace();
+            }
+          }else{//if the point was not tested print spaces
+            //result.append(Utils.padLeft("",resultsetLength));
+          }
+        }
+        if(r_ctr>0){
+          //compute number of pts to average over
+          int numTop = (int)(nFraction * r_ctr);
+          if(numTop < 1) numTop = 1;//there should be a minimum of 1 point
+		    
+          //sort the part of the array for which pts were recorded on this dataset
+          //Arrays.sort(ptsErrorReduction, 0, r_ctr);
+		    
+          //find top n points of error reduction
+          //sort pairs, based on error reduction
+          //sort in DEScending order
+          try{
+            Arrays.sort(ptsErrorReduction, 0, r_ctr, new Comparator() {
+                public int compare(Object o1, Object o2) {
+                  double diff = ((Triple)o2).first - ((Triple)o1).first; 
+                  return(diff < 0 ? 1 : diff > 0 ? -1 : 0);
+                }
+              });
+          }catch(Exception ex){
+            ex.printStackTrace();
+          }
+			
+          //compute the mean of these points
+          //Note: the array is in ascending order
+          double r_sum = 0.0;//sum across the row
+          double signCtr = 0;
+          Instance specifier;
+		    
+          //create a new pairedStats
+          PairedStats pairedStats = new PairedStats(m_SignificanceLevel);
+		    
+          for(int topIndex = r_ctr-1 ; topIndex >= (r_ctr - numTop); topIndex--){
+            r_sum += ptsErrorReduction[topIndex].first;
+            signCtr += ptsErrorReduction[topIndex].second;
+            //also compute the number of statistically significant points
+			
+            //accumulate the paired stats
+            try{
+              pairedStats = accumulateStatistics(ptsErrorReduction[topIndex].third, baseResultset, j, comparisonColumn, pairedStats);
+            }catch(Exception ex){
+              ex.printStackTrace();
+            }
+          }
+          /***************************
+           * NOTE: The largest reductions in error are 
+           * not necessarily the most significant differences.
+           ***************************/
+		    
+          datasetCtr++;
+          double r_avg = r_sum/numTop;
+          datasetSum += r_avg;
+          result.append(" | "+Utils.padLeft(Utils.doubleToString(r_avg,meanWidth,m_Precision),resultsetLength-3));
+          result.append("\t"+signCtr+" / "+numTop+" = "+Utils.doubleToString((signCtr/numTop),meanWidth,m_Precision));
+		    
+          //perform t-tests on accumulated stats across selected points
+          pairedStats.calculateDerived();
+          //Check if result is statistically significant
+          if(pairedStats.differencesSignificance > 0) result.append("\t(Diff in mean is Significant)"); 
+          //else result.append("\t(Diff in mean is NOT Significant)"); 
+        }
+        result.append("\n");
+      }
+      String s="";
+      for(int k=0; k<meanWidth; k++)
+        s = s + "-";
+      result.append(Utils.padLeft(s,datasetLength+resultsetLength));
+      result.append("\n");
+      result.append(Utils.padLeft(Utils.doubleToString(datasetSum/datasetCtr,meanWidth,m_Precision),datasetLength+resultsetLength)+"\n\n\n");
+    }
+    return result.toString();
+  }
+
+  class Triple{
+    public double first;
+    public double second;
+    public Instance third;
+    
+    public Triple(double a, double b, Instance c){
+	first = a;
+	second = b;
+	third = c;
+    }
+}
+    //=============== END EDIT melville ===============
+
+ 
 				    
   /**
    * Creates a comparison table where a base resultset is compared to the
@@ -1509,6 +2458,21 @@ public class PairedTTester implements OptionHandler {
 
     StringBuffer result = new StringBuffer(1000);
 
+    //=============== BEGIN EDIT melville ===============
+    if(m_LearningCurve){
+      if(getNumResultsets()==1)//no comparison to be made - just display one learn
+        result = new StringBuffer(oneResultsetFullLearningPlainText(baseResultset, 
+                                                                    comparisonColumn, 
+                                                                    maxWidthMean,
+                                                                    maxWidthStdDev));
+      else
+        result = new StringBuffer(multiResultsetFullLearningPlainText(baseResultset, 
+                                                                      comparisonColumn, 
+                                                                      maxWidthMean,
+                                                                      maxWidthStdDev));
+    } else 
+      //=============== END EDIT melville ===============
+      
     if (m_latexOutput) {
       result = new StringBuffer(multiResultsetFullLatex(baseResultset, 
 							comparisonColumn, 

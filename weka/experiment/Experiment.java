@@ -60,6 +60,9 @@ import java.beans.PropertyEditor;
 import java.beans.PropertyChangeSupport;
 import java.beans.PropertyChangeListener;
 
+import weka.linkage.*;
+
+
 /**
  * Holds all the necessary configuration information for a standard
  * type experiment. This object is able to be serialized for storage
@@ -77,13 +80,13 @@ public class Experiment implements Serializable, OptionHandler {
   protected ResultListener m_ResultListener = new InstancesResultListener();
   
   /** The result producer */
-  protected ResultProducer m_ResultProducer = new RandomSplitResultProducer();
+  protected ResultProducer m_ResultProducer = new LinkagePRCurveCVResultProducer();
 
   /** Lower run number */
   protected int m_RunLower = 1;
 
   /** Upper run number */
-  protected int m_RunUpper = 10;
+  protected int m_RunUpper = 1;
 
   /** An array of dataset files */
   protected DefaultListModel m_Datasets = new DefaultListModel();

@@ -17,6 +17,7 @@
 /*
  *    RemoteExperiment.java
  *    Copyright (C) 2000 Mark Hall
+ *    Modified by Prem Melville
  *
  */
 
@@ -590,9 +591,22 @@ public class RemoteExperiment extends Experiment {
 			     elementAt(0)).getName()
 	    : "run :" + m_subExperiments[wexp].getRunLower();
 	  try {
-	    String name = "//"
-	      +((String)m_remoteHosts.elementAt(ah))
-	      +"/RemoteEngine";
+            /**  BEGIN EDIT - Melville **/
+	      String hostname = ((String)m_remoteHosts.elementAt(ah));
+	      String name=null;
+	      int splitIndex = hostname.indexOf(":");
+	      if(splitIndex>-1){
+		  name = "//"
+		      +hostname.substring(0,splitIndex)
+		      +"/RemoteEngine"+hostname.substring(splitIndex+1);
+	      }
+	      else {
+		  name = "//"
+			+((String)m_remoteHosts.elementAt(ah))
+			+"/RemoteEngine";
+	      }
+	      /**  END EDIT - Melville **/
+
 	    Compute comp = (Compute) Naming.lookup(name);
 	    // assess the status of the sub-exp
 	    notifyListeners(false,true,false,"Starting "

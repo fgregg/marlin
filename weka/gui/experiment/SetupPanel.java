@@ -230,6 +230,41 @@ public class SetupPanel extends JPanel {
     java.beans.PropertyEditorManager
       .registerEditor(weka.classifiers.CostMatrix.class,
 		      weka.gui.CostMatrixEditor.class);
+    //=============== BEGIN EDIT 
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.Deduper.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.PairwiseSelector.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.metrics.InstanceMetric.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.metrics.StringMetric.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.metrics.StringMetric [].class,
+		      weka.gui.GenericArrayEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.metrics.Tokenizer.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.blocking.Blocking.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.blocking.learn.BlockingLearner.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.blocking.learn.BlockingSampler.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.blocking.learn.Blocker.class,
+		      GenericObjectEditor.class);
+    java.beans.PropertyEditorManager
+      .registerEditor(weka.linkage.blocking.learn.Blocker [].class,
+		      GenericArrayEditor.class);
+    //================ END EDIT
   }
   
   /**
@@ -302,9 +337,11 @@ public class SetupPanel extends JPanel {
     m_RPEditor.addPropertyChangeListener(new PropertyChangeListener() {
       public void propertyChange(PropertyChangeEvent e) {
 	m_Exp.setResultProducer((ResultProducer) m_RPEditor.getValue());
-	m_Exp.setUsePropertyIterator(false);
-	m_Exp.setPropertyArray(null);
-	m_Exp.setPropertyPath(null);
+//=============== BEGIN EDIT mbilenko =============== 
+// 	m_Exp.setUsePropertyIterator(false);
+// 	m_Exp.setPropertyArray(null);
+// 	m_Exp.setPropertyPath(null);
+//=============== BEGIN EDIT mbilenko ===============         
 	m_GeneratorPropertyPanel.setExperiment(m_Exp);
 	repaint();
       }

@@ -3,7 +3,8 @@
 
 # Lists the ResultProducers-Packages I want to choose from
 weka.experiment.ResultProducer=\
-  weka.experiment
+  weka.experiment,\
+  weka.linkage
 
 # Lists the ResultListeners-Packages I want to choose from
 weka.experiment.ResultListener=\
@@ -11,7 +12,8 @@ weka.experiment.ResultListener=\
 
 # Lists the SplitEvaluators-Packages I want to choose from
 weka.experiment.SplitEvaluator=\
-  weka.experiment
+  weka.experiment,\
+  weka.linkage
 
 # Lists the Classifiers-Packages I want to choose from
 weka.classifiers.Classifier=\
@@ -21,7 +23,7 @@ weka.classifiers.Classifier=\
  weka.classifiers.meta,\
  weka.classifiers.trees,\
  weka.classifiers.rules
-
+ 
 # Lists the Filters-Packages I want to choose from
 weka.filters.Filter= \
  weka.filters.supervised.attribute, \
@@ -72,3 +74,34 @@ weka.classifiers.bayes.net.search.SearchAlgorithm=\
 
 weka.classifiers.bayes.net.estimate.BayesNetEstimator =\
  weka.classifiers.bayes.net.estimate
+
+
+# Linkage
+weka.linkage.Deduper=\
+  weka.linkage
+
+weka.linkage.metrics.InstanceMetric = \
+  weka.linkage.metrics
+
+weka.linkage.metrics.StringMetric = \
+  weka.linkage.metrics
+
+weka.linkage.metrics.Tokenizer = \
+  weka.linkage.metrics
+
+weka.linkage.PairwiseSelector = \
+  weka.linkage
+
+
+# Blocking
+weka.linkage.blocking.Blocking = \
+ weka.linkage.blocking
+
+weka.linkage.blocking.learn.BlockingLearner = \
+ weka.linkage.blocking.learn
+
+weka.linkage.blocking.learn.BlockingSampler = \
+ weka.linkage.blocking.learn
+
+weka.linkage.blocking.learn.Blocker = \
+ weka.linkage.blocking.learn

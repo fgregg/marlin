@@ -38,6 +38,7 @@ import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.JPanel;
 import javax.swing.JOptionPane;
+import java.net.*;
 
 
 /** 
@@ -93,6 +94,7 @@ public class Experimenter extends JPanel {
 	m_TabbedPane.setEnabledAt(1, true);
       }
     });
+    m_SetupPanel.switchToAdvanced(m_SetupPanel.getExperiment());
     setLayout(new BorderLayout());
     add(m_TabbedPane, BorderLayout.CENTER);
   }
@@ -124,7 +126,9 @@ public class Experimenter extends JPanel {
 	classFirst = args[0].equals("CLASS_FIRST");
       }
       m_experimenter = new Experimenter(classFirst);
-      final JFrame jf = new JFrame("Weka Experiment Environment");
+      InetAddress host = InetAddress.getLocalHost();
+      final JFrame jf = new JFrame("Weka @" + host.getHostName());
+      
       jf.getContentPane().setLayout(new BorderLayout());
       jf.getContentPane().add(m_experimenter, BorderLayout.CENTER);
       jf.addWindowListener(new WindowAdapter() {
@@ -134,7 +138,7 @@ public class Experimenter extends JPanel {
 	}
       });
       jf.pack();
-      jf.setSize(800, 600);
+      jf.setSize(1280, 1000);
       jf.setVisible(true);
 
       Thread memMonitor = new Thread() {

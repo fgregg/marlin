@@ -459,9 +459,26 @@ public class DatabaseUtils implements Serializable {
    * @exception SQLException if an error occurs
    */
   public boolean execute(String query) throws SQLException {
- 
-    m_PreparedStatement = m_Connection.prepareStatement(query);
-    return(m_PreparedStatement.execute());
+    boolean result; 
+    try { 
+      m_PreparedStatement = m_Connection.prepareStatement(query);
+      result = m_PreparedStatement.execute();
+    } catch (Exception e) {
+      System.out.println("Problem in executing: " + e.toString()); 
+      e.printStackTrace();
+      
+      System.out.println("Trying again: " );
+      m_Connection = null;
+      try { 
+        connectToDatabase();
+      } catch (Exception e1) {
+        System.out.println("Problems re-connecting to the database: " + e1); 
+        e1.printStackTrace();
+      } 
+      m_PreparedStatement = m_Connection.prepareStatement(query);
+      result = m_PreparedStatement.execute();
+    }
+    return result;
   }
 
   /**

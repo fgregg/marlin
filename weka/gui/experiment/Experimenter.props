@@ -48,10 +48,10 @@ InitialDatasetsDirectory=
 UseRelativePaths=false
 
 # the row selection (1-based index/indices)
-Row=1
+Row=1,4
 
 # the column selection (1-based index/indices)
-Column=3,4,5
+Column=5,6,7
 
 # the default comparison field (lower case!)
 # see ComboBox in Experimenter
@@ -64,8 +64,12 @@ Significance=0.05
 ShowStdDev=false
 
 # the default precision for the mean
-MeanPrecision=2
+MeanPrecision=4
 
 # the default precision for the stdev
-StdDevPrecision=2
+StdDevPrecision=4
+
+
+
+
 

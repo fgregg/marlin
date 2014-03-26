@@ -43,6 +43,14 @@ import weka.core.Instance;
 import weka.core.converters.Loader;
 import weka.core.converters.CSVLoader;
 
+//=============== BEGIN EDIT mbilenko ===============
+import java.io.PrintWriter;
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.util.Arrays;
+//=============== END EDIT mbilenko ===============
+
 import java.io.Reader;
 import java.io.FileReader;
 import java.io.BufferedReader;
@@ -186,6 +194,19 @@ public class ResultsPanel extends JPanel {
   /** Click to save test output to a file */
   protected JButton m_SaveOutBut = new JButton("Save output");
 
+  //=============== BEGIN EDIT mbilenko ===============
+  /** Click to launch gnuplot */
+  protected JButton m_PlotBut = new JButton("Plot");
+  //=============== END EDIT mbilenko ===============
+
+  //=============== BEGIN EDIT melville ===============
+  /** Lets the user specify the precision of results desired */
+  protected JTextField m_PrecTex = new JTextField("3");
+  
+  //To remember index of error for computing error reductions
+  protected int m_ErrorCompareCol;
+  //=============== END EDIT melville ===============
+
   /** The buffer saving object for saving output */
   SaveBuffer m_SaveOut = new SaveBuffer(null, this);
 
@@ -313,6 +334,10 @@ public class ResultsPanel extends JPanel {
 				     .MULTIPLE_INTERVAL_SELECTION);
     m_CompareCombo.setEnabled(false);
 
+    //=============== BEGIN EDIT melville ===============
+    m_PrecTex.setEnabled(false);
+    //=============== END EDIT melville ===============
+    
     m_SigTex.setEnabled(false);
     m_TestsButton.setEnabled(false);
     m_TestsButton.addActionListener(new ActionListener() {
@@ -342,6 +367,9 @@ public class ResultsPanel extends JPanel {
       public void actionPerformed(ActionEvent e) {
 	performTest();
 	m_SaveOutBut.setEnabled(true);
+        //=============== BEGIN EDIT mbilenko ===============
+	m_PlotBut.setEnabled(true);
+	//=============== END EDIT mbilenko ===============
       }
     });
 
@@ -353,6 +381,15 @@ public class ResultsPanel extends JPanel {
 	  saveBuffer();
 	}
       });
+    //=============== BEGIN EDIT mbilenko ===============
+    m_PlotBut.setEnabled(false);
+    m_PlotBut.addActionListener(new ActionListener() {
+	public void actionPerformed(ActionEvent e) {
+	  plotOutput();
+	}
+      });
+    //=============== END EDIT mbilenko ===============
+    
     m_OutText.setFont(new Font("Monospaced", Font.PLAIN, 12));
     m_OutText.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
     m_OutText.setEditable(false);
@@ -465,7 +502,6 @@ public class ResultsPanel extends JPanel {
     gbL.setConstraints(m_DisplayedButton, gbC);
     p3.add(m_DisplayedButton);
 
-
     lab = new JLabel("Show std. deviations", SwingConstants.RIGHT);
     gbC = new GridBagConstraints();
     gbC.anchor = GridBagConstraints.EAST;
@@ -493,6 +529,21 @@ public class ResultsPanel extends JPanel {
     gbC.insets = new Insets(5,0,5,0);
     gbL.setConstraints(m_OutputFormatButton, gbC);
     p3.add(m_OutputFormatButton);
+
+    //=============== BEGIN EDIT melville ===============
+    lab = new JLabel("Significant digits", SwingConstants.RIGHT);
+    gbC = new GridBagConstraints();
+    gbC.anchor = GridBagConstraints.EAST;
+    gbC.gridy = 9;     gbC.gridx = 0;
+    gbC.insets = new Insets(2, 10, 2, 10);
+    gbL.setConstraints(lab, gbC);
+    p3.add(lab);
+    gbC = new GridBagConstraints();
+    gbC.gridy = 9;     gbC.gridx = 1;  gbC.weightx = 100;
+    gbL.setConstraints(m_PrecTex, gbC);
+    p3.add(m_PrecTex);
+    //=============== END EDIT melville ===============
+
     
     JPanel output = new JPanel();
     output.setLayout(new BorderLayout());
@@ -513,6 +564,9 @@ public class ResultsPanel extends JPanel {
     bts.setLayout(new GridLayout(1,2,5,5));
     bts.add(m_PerformBut);
     bts.add(m_SaveOutBut);
+    //=============== BEGIN EDIT mbilenko ===============
+    bts.add(m_PlotBut);
+    //=============== END EDIT mbilenko ===============
 
     gbC = new GridBagConstraints();
     gbC.anchor = GridBagConstraints.NORTH;
@@ -566,6 +620,11 @@ public class ResultsPanel extends JPanel {
     m_ResultKeyBut.setMinimumSize(COMBO_SIZE);
     m_CompareCombo.setMinimumSize(COMBO_SIZE);
     m_SigTex.setMinimumSize(COMBO_SIZE);
+     //=============== BEGIN EDIT melville ===============
+    m_PrecTex.setPreferredSize(COMBO_SIZE);
+    m_PrecTex.setMaximumSize(COMBO_SIZE);
+    m_PrecTex.setMinimumSize(COMBO_SIZE);
+    //=============== END EDIT melville ===============
   }
   
   /**
@@ -746,13 +805,14 @@ public class ResultsPanel extends JPanel {
 	throw new Exception("Unrecognized file type");
       }
     } catch (Exception ex) {
+      ex.printStackTrace();
       m_FromLab.setText("File '" + f.getName() + "' not recognised as an "
 			  +fileType+" file.");
       if (JOptionPane.showOptionDialog(ResultsPanel.this,
 				       "File '" + f.getName()
 				       + "' not recognised as an "
 				       +fileType+" file.\n"
-				       + "Reason:\n" + ex.getMessage(),
+				       + "Reason:\n" + ex + "\n",
 				       "Load Instances",
 				       0,
 				       JOptionPane.ERROR_MESSAGE,
@@ -783,18 +843,50 @@ public class ResultsPanel extends JPanel {
     int datasetCol = -1;
     String selectedList = "";
     String selectedListDataset = "";
-    boolean comparisonFieldSet = false; 
+    boolean comparisonFieldSet = false;
+
+    //=============== BEGIN EDIT melville ===============
+    boolean noise = false;//keep track of whether noise levels eval is required
+    boolean learning = false;//keep track of whether learning curve eval is required
+    boolean fraction = false;//keep track of whether fractions of datasets are provided for learning
+    //the key on which to base the learning curves (either total instances or fraction) 
+    int learning_key = -1;
+    boolean classificationTask = false;//used to determine if regression measures should be selected
+    //=============== END EDIT melville ===============
+    
     for (int i = 0; i < m_Instances.numAttributes(); i++) {
       String name = m_Instances.attribute(i).name();
-      if (name.toLowerCase().startsWith("key_", 0)) {
-	m_DatasetKeyModel.addElement(name.substring(4));
-	m_ResultKeyModel.addElement(name.substring(4));
-	m_CompareModel.addElement(name.substring(4));
-      } else {
+//       if (name.toLowerCase().startsWith("key_", 0)) {
+// 	m_DatasetKeyModel.addElement(name.substring(4));
+// 	m_ResultKeyModel.addElement(name.substring(4));
+// 	m_CompareModel.addElement(name.substring(4));
+//       } else {
+      {
 	m_DatasetKeyModel.addElement(name);
 	m_ResultKeyModel.addElement(name);
 	m_CompareModel.addElement(name);
       }
+
+      //=============== BEGIN EDIT melville ===============
+      //If learning curves were generated then treat each
+      //dataset + pt combination as a different dataset
+      if(name.toLowerCase().equals("key_noise_levels")){
+	  //noise overrides learning curves - but treat noise levels
+	  //like pts on learning curve
+	  learning_key = i;
+	  learning = true;
+	  noise = true;
+	  //fraction = true;
+      } else if(name.toLowerCase().equals("key_fraction_instances") && !noise) {
+	  //fraction overrides total_instances
+	  learning_key = i;
+	  learning = true;
+	  fraction = true;
+      } else if(name.toLowerCase().equals("key_total_instances") && !learning) {
+	  learning_key = i;
+	  learning = true;
+      } else
+      //=============== END EDIT melville ===============	
 
       if (name.toLowerCase().equals("key_dataset")) {
 	m_DatasetKeyList.addSelectionInterval(i, i);
@@ -808,6 +900,26 @@ public class ResultsPanel extends JPanel {
 		 name.toLowerCase().equals("key_scheme_version_id")) {
 	m_ResultKeyList.addSelectionInterval(i, i);
 	selectedList += "," + (i + 1);
+
+      //=============== BEGIN EDIT mbilenko ===============
+      // automatic selection of the correct measure for linkage experiments 
+      } else if (name.toLowerCase().equals("percent_correct")) {
+	m_CompareCombo.setSelectedIndex(i);
+
+        // automatic selection of the correct measure for deduping experiments
+      } else if (name.toLowerCase().equals("pprecision")) {
+	m_CompareCombo.setSelectedIndex(i);
+
+//         // automatic selection of the correct measure for clustering experiments 
+//       } else if (name.toLowerCase().equals("precall")) {
+// 	m_CompareCombo.setSelectedIndex(i);
+
+        // automatic selection of the correct measure for clustering experiments 
+      } else if (name.toLowerCase().indexOf("pairwise_f_measure") != -1) {
+	  m_CompareCombo.setSelectedIndex(i);
+	  m_ErrorCompareCol = i;
+      //=============== END EDIT mbilenko ===============
+        
       } else if (name.toLowerCase().indexOf(ExperimenterDefaults.getComparisonField()) != -1) {
 	m_CompareCombo.setSelectedIndex(i);
 	comparisonFieldSet = true;
@@ -818,6 +930,16 @@ public class ResultsPanel extends JPanel {
 	comparisonFieldSet = true;
       }
     }
+
+    //=============== BEGIN EDIT melville ===============	
+    if(learning){
+      m_DatasetKeyList.addSelectionInterval(learning_key, learning_key);
+      selectedListDataset += "," + (learning_key + 1);
+      m_CompareModel.addElement("%Error_reduction");
+      m_CompareModel.addElement("Top_20%_%Error_reduction");
+    }
+    //=============== END EDIT melville ===============
+  
     m_DatasetKeyBut.setEnabled(true);
     m_ResultKeyBut.setEnabled(true);
     m_CompareCombo.setEnabled(true);
@@ -850,6 +972,29 @@ public class ResultsPanel extends JPanel {
     }
     m_TTester.setDatasetKeyColumns(generatorRange);
 
+    //=============== BEGIN EDIT melville ===============
+    m_TTester.setLearningCurve(learning);
+    m_TTester.setFraction(fraction);
+    if(learning){//get points on the learning curve
+	Attribute attr;
+	if(noise){//override fraction
+	    attr = m_Instances.attribute("Key_Noise_levels");
+	}else if(fraction){
+	    attr = m_Instances.attribute("Key_Fraction_instances");
+	}else {
+	    attr = m_Instances.attribute("Key_Total_instances");
+	}
+	double []pts = new double [attr.numValues()];
+	for(int k=0; k<attr.numValues(); k++){
+	    pts[k] = Double.parseDouble(attr.value(k));
+	}
+	//sort points
+	Arrays.sort(pts);
+	m_TTester.setPoints(pts);
+    }
+     m_PrecTex.setEnabled(true);
+    //=============== END EDIT melville ===============
+    
     m_SigTex.setEnabled(true);
 
     setTTester();
@@ -888,6 +1033,10 @@ public class ResultsPanel extends JPanel {
     m_TestsModel.addElement("Summary");
     m_TestsModel.addElement("Ranking");
 
+    //================ BEGIN EDIT melville ================
+    m_TestsModel.addElement("Learning Curve Summary");
+    //================ END EDIT melville ================
+
     m_TestsList.setSelectedIndex(0);
     m_DisplayedList.setSelectionInterval(0, m_DisplayedModel.size() - 1);
     
@@ -917,29 +1066,59 @@ public class ResultsPanel extends JPanel {
     int compareCol = m_CompareCombo.getSelectedIndex();
     int tType = m_TestsList.getSelectedIndex();
 
+     //=============== BEGIN EDIT melville REPLACES CODE COMMENTED OUT BELOW
+    String test_selected = (String) m_TestsList.getSelectedValue();
     String name = (new SimpleDateFormat("HH:mm:ss - "))
       .format(new Date())
       + (String) m_CompareCombo.getSelectedItem() + " - "
-      + (String) m_TestsList.getSelectedValue();
+      + test_selected;
     StringBuffer outBuff = new StringBuffer();
-    outBuff.append(m_TTester.header(compareCol));
+    if(((String) m_CompareCombo.getSelectedItem()).equalsIgnoreCase("%error_reduction"))
+	outBuff.append(m_TTester.header("Percentage error reduction"));
+    else if(((String) m_CompareCombo.getSelectedItem()).equalsIgnoreCase("top_20%_%error_reduction"))
+	outBuff.append(m_TTester.header("Top 20% Percentage error reduction"));
+    else outBuff.append(m_TTester.header(compareCol));
     outBuff.append("\n");
     m_History.addResult(name, outBuff);
     m_History.setSingle(name);
-    m_TTester.setDisplayedResultsets(m_DisplayedList.getSelectedIndices());
-    m_TTester.setMeanPrec(m_MeanPrec);
-    m_TTester.setStdDevPrec(m_StdDevPrec);
-    m_TTester.setProduceLatex(m_latexOutput);
-    m_TTester.setProduceCSV(m_csvOutput);
     try {
-      if (tType < m_TTester.getNumResultsets()) {
-	outBuff.append(m_TTester.multiResultsetFull(tType, compareCol));
-      } else if (tType == m_TTester.getNumResultsets()) {
-	outBuff.append(m_TTester.multiResultsetSummary(compareCol));
-      } else {
-	outBuff.append(m_TTester.multiResultsetRanking(compareCol));
-      }
-      outBuff.append("\n");
+	if (tType < m_TTester.getNumResultsets()) {
+          if(((String) m_CompareCombo.getSelectedItem()).equalsIgnoreCase("%error_reduction")){
+            outBuff.append(m_TTester.multiResultsetPercentErrorReduction(tType, m_ErrorCompareCol));
+          }else if(((String) m_CompareCombo.getSelectedItem()).equalsIgnoreCase("top_20%_%error_reduction")){
+            outBuff.append(m_TTester.multiResultsetTopNPercentErrorReduction(tType, m_ErrorCompareCol, 0.20));
+          }else outBuff.append(m_TTester.multiResultsetFull(tType, compareCol));
+	}
+        
+        else if (test_selected.equalsIgnoreCase("summary")) {
+	  outBuff.append(m_TTester.multiResultsetSummary(compareCol));
+        } else if (test_selected.equalsIgnoreCase("ranking")) {
+	  outBuff.append(m_TTester.multiResultsetRanking(compareCol));
+        }  
+        //================ END EDIT melville ================
+//     String name = (new SimpleDateFormat("HH:mm:ss - "))
+//       .format(new Date())
+//       + (String) m_CompareCombo.getSelectedItem() + " - "
+//       + (String) m_TestsList.getSelectedValue();
+//     StringBuffer outBuff = new StringBuffer();
+//     outBuff.append(m_TTester.header(compareCol));
+//     outBuff.append("\n");
+//     m_History.addResult(name, outBuff);
+//     m_History.setSingle(name);
+//     m_TTester.setDisplayedResultsets(m_DisplayedList.getSelectedIndices());
+//     m_TTester.setMeanPrec(m_MeanPrec);
+//     m_TTester.setStdDevPrec(m_StdDevPrec);
+//     m_TTester.setProduceLatex(m_latexOutput);
+//     m_TTester.setProduceCSV(m_csvOutput);
+//     try {
+//       if (tType < m_TTester.getNumResultsets()) {
+// 	outBuff.append(m_TTester.multiResultsetFull(tType, compareCol));
+//       } else if (tType == m_TTester.getNumResultsets()) {
+// 	outBuff.append(m_TTester.multiResultsetSummary(compareCol));
+//       } else {
+// 	outBuff.append(m_TTester.multiResultsetRanking(compareCol));
+//       }
+        outBuff.append("\n");
     } catch (Exception ex) {
       outBuff.append(ex.getMessage() + "\n");
     }
@@ -981,14 +1160,63 @@ public class ResultsPanel extends JPanel {
 
     // Open the dialog
     int result = jd.showDialog();
+
+    //=============== BEGIN EDIT melville REPLACES CODE COMMENTED OUT BELOW
+    //Check if learning curves should be generated
+    boolean noise = false;
+    boolean learning = false;
+    boolean fraction = false;
+    int learning_key = -1;
     
     // If accepted, update the ttester
     if (result == ListSelectorDialog.APPROVE_OPTION) {
       int [] selected = m_DatasetKeyList.getSelectedIndices();
       String selectedList = "";
+      Object [] selected_string = m_DatasetKeyList.getSelectedValues();
       for (int i = 0; i < selected.length; i++) {
-	selectedList += "," + (selected[i] + 1);
+	  if(((String)selected_string[i]).toLowerCase().equals("key_noise_levels")){
+	      learning_key = i;
+	      learning = true;
+	      //fraction = true;
+	      noise = true;
+	  }else	if(((String)selected_string[i]).toLowerCase().equals("key_fraction_instances")){
+	      learning_key = i;
+	      learning = true;
+	      fraction = true;
+	  }else if(((String)selected_string[i]).toLowerCase().equals("key_total_instances")  && !learning){ 
+	      learning = true;
+	      learning_key = i;
+	  }else
+	      selectedList += "," + (selected[i] + 1);
       }
+      
+      m_TTester.setLearningCurve(learning);
+      m_TTester.setFraction(fraction);
+      if(learning){//get points on the learning curve
+	  selectedList += "," + (selected[learning_key] + 1);
+	  Attribute attr;
+	  if(noise){//override fraction
+	      attr = m_Instances.attribute("Key_Noise_levels");
+	  }else	if(fraction){
+	      attr = m_Instances.attribute("Key_Fraction_instances");
+	  }else {
+	      attr = m_Instances.attribute("Key_Total_instances");
+	  }
+	  double []pts = new double [attr.numValues()];
+	  for(int k=0; k<attr.numValues(); k++){
+	      pts[k] = Double.parseDouble(attr.value(k));
+	  }
+	  Arrays.sort(pts);
+	  m_TTester.setPoints(pts);
+      }
+      //================ END EDIT melville ================
+    // // If accepted, update the ttester
+//     if (result == ListSelectorDialog.APPROVE_OPTION) {
+//       int [] selected = m_DatasetKeyList.getSelectedIndices();
+//       String selectedList = "";
+//       for (int i = 0; i < selected.length; i++) {
+// 	selectedList += "," + (selected[i] + 1);
+//       }
       Range generatorRange = new Range();
       if (selectedList.length() != 0) {
 	try {
@@ -1053,6 +1281,51 @@ public class ResultsPanel extends JPanel {
       m_SaveOutBut.setEnabled(false);
     }
   }
+
+  //=============== BEGIN EDIT mbilenko ===============
+  /** Plot the currently selected output buffer  */
+  protected void plotOutput() {
+    try { 
+      StringBuffer sb = m_History.getSelectedBuffer();
+      if (sb != null) {
+	// dump the output into a temporary file
+	File tempDirFile = new File("/tmp");
+	final File bufferFile = File.createTempFile("buffer", "", tempDirFile);
+	bufferFile.deleteOnExit();
+
+	PrintWriter writer = new PrintWriter(new BufferedOutputStream(new FileOutputStream(bufferFile)));
+	writer.print(sb);
+	writer.close();
+
+	// launch the perl script to process the file
+	
+        //	Process proc = Runtime.getRuntime().exec("perl /u/ml/software/weka-latest/weka/gui/experiment/plot.pl " + bufferFile.getPath());
+        Process proc = Runtime.getRuntime().exec("perl /u/mbilenko/weka/weka/gui/experiment/plot.pl " + bufferFile.getPath());
+	proc.waitFor();
+
+	// get a list of generated gnuplot scripts
+	String[] scriptList = tempDirFile.list(new FilenameFilter() {
+	    public boolean accept(File f, String s) { return (s.endsWith(".gplot") && s.startsWith(bufferFile.getName())); }
+	  });
+	for (int i = 0; i < scriptList.length; i++) {
+	  // launch gnuplot
+	  scriptList[i] = tempDirFile.getPath() + "/" + scriptList[i];
+	  System.out.println(scriptList[i]);
+	  proc = Runtime.getRuntime().exec("gnuplot -persist " + scriptList[i]);
+	  File plotFile = new File(scriptList[i]);
+	  plotFile.deleteOnExit();
+	  File dataFile = new File(scriptList[i].replaceAll(".gplot", ".dat"));
+	  dataFile.deleteOnExit();
+	} 
+      } else {
+	m_PlotBut.setEnabled(false);
+      }
+    } catch (Exception e) {
+      System.out.println("Problems plotting: " + e);
+      e.printStackTrace();
+    } 
+  } 
+  //=============== END EDIT mbilenko ===============
   
   /**
    * Tests out the results panel from the command line.

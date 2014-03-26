@@ -126,11 +126,11 @@ public class SetupModePanel extends JPanel {
    */
   public void switchToAdvanced(Experiment exp) {
  
+    m_AdvancedSetupRBut.setSelected(true);
     if (exp == null) {
       exp = m_simplePanel.getExperiment();
     }
     if (exp != null) {
-      m_AdvancedSetupRBut.setSelected(true);
       m_advancedPanel.setExperiment(exp);
     }
     remove(m_simplePanel);
